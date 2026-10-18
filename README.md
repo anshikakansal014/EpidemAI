@@ -5,6 +5,14 @@ EpidemAI is a two-part local app:
 - `frontend/` — Vite + React dashboard on `http://localhost:8080`
 - `backend/` — FastAPI API on `http://localhost:8000`
 
+The landing page provides separate Government and Individual Health Portal entry points. The individual portal lives at `/health-portal` and reuses the symptom assistant at `/health-assistant`. The government view remains a demonstration interface; secure government authentication is not configured.
+
+### Health assistant demo
+
+Open **Individual Health Portal → Report symptoms → Load sample demo**. The sample uses fictional symptoms and Wardha, Maharashtra, which has matching records in the bundled historical dataset. Review the symptom summary, acknowledge the general-information notice, and continue to see the assistant guidance and dated district records. The sample is not a real person's location or live outbreak data. The assistant does not diagnose, estimate an individual's disease probability, or select tests. See [the full implementation guide](PERSONAL_HEALTH_ASSISTANT_IMPLEMENTATION.md) for data sources and limitations.
+
+For an explanation of the app, its current data sources, analysis helpers, and TinyFish's role, see [Project overview](docs/PROJECT_OVERVIEW.md). For TinyFish implementation and operations, see [TinyFish integration](docs/TINYFISH_INTEGRATION.md).
+
 ## Local Run
 
 From the project root:
@@ -14,11 +22,12 @@ chmod +x run-local.sh
 ./run-local.sh
 ```
 
-This starts both services together with the frontend already pointed at the backend API.
+This starts both services together with the frontend already pointed at the backend API. The local URLs are `http://localhost:8080` and `http://localhost:8000`.
 
 ## Notes
 
-- The backend in this folder includes a `.venv`, but some generated launcher scripts inside it use an old absolute path. `run-local.sh` avoids those broken wrappers and starts the backend with the correct local site-packages path.
+- `run-local.sh` uses an available backend virtual environment (`.venv-new`, `.venv-local`, or `.venv`) and `frontend/node_modules`. If those dependencies are missing, install them using the commands in `backend/README.md` and `frontend/package.json`.
+- `/health-portal` and `/health-assistant` are an individual-facing prototype with opt-in history and no account system. `/gov-portal` is a sample dashboard without secure government authentication; do not use it for official decisions or confidential data.
 - Frontend production build works with:
 
 ```bash
@@ -90,3 +99,25 @@ https://your-render-backend.onrender.com/api/health
 4. Deploy frontend on Vercel.
 5. Copy the Vercel frontend URL.
 6. Set `CORS_ORIGINS` in Render to that Vercel URL and redeploy the backend once.
+
+### TinyFish news ingestion
+
+The backend can collect public-health news with TinyFish and serve normalized articles through the existing `GET /api/news` endpoint. API keys stay on the backend.
+
+For the integration flow, code map, security notes, and deployment details, see [TinyFish integration in EpidemAI](docs/TINYFISH_INTEGRATION.md).
+
+Set these variables in `backend/.env` locally and in Render for deployment:
+
+- `TINYFISH_API_KEY` — create a key in your TinyFish account.
+- `TINYFISH_SOURCE_URLS` — comma-separated public source homepages; up to five are collected per run.
+- `INGEST_API_KEY` — a separate strong secret authorizing collection runs.
+- `TINYFISH_DB_PATH` — optional SQLite path. By default data is stored under `backend/app/data`; on Render, use a persistent disk mount path to retain articles across deploys.
+
+Trigger collection manually (this may consume TinyFish usage):
+
+```bash
+curl -X POST http://localhost:8000/api/ingest/tinyfish \
+  -H "X-Ingest-Key: YOUR_INGEST_API_KEY"
+```
+
+Check setup and stored article count at `GET /api/ingest/tinyfish/status`. To collect regularly, schedule the POST with a trusted scheduler and store `INGEST_API_KEY` there as a secret.
